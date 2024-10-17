@@ -5,12 +5,11 @@ require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
-const cron = require('node-cron');
 const axios = require('axios');
 const http = require('http');
 const socketIo = require('socket.io');
-const jwt = require('jsonwebtoken'); // Add jwt for token verification
-const WebSocket = require('ws'); // Add ws package for WebSocket
+const jwt = require('jsonwebtoken');
+const WebSocket = require('ws'); // WebSocket client for Bitget
 
 // Import local modules
 const Trade = require('./models/Trade');
@@ -28,15 +27,49 @@ app.use(cors());
 app.use(express.json());
 
 // MongoDB Connection
-mongoose.connect(process.env.MONGO_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
-})
+mongoose.connect(process.env.MONGO_URI, {})
   .then(() => console.log('MongoDB connected successfully'))
   .catch(err => console.error('MongoDB connection error:', err));
 
-// Set up Bitget WebSocket connection
-const bitgetWs = new WebSocket('wss://ws.bitget.com/mix/v1/market');
+// Function to handle Bitget WebSocket connection
+let bitgetWs;
+const connectToBitget = () => {
+  bitgetWs = new WebSocket('wss://ws.bitget.com/v2/ws/public');
+
+  bitgetWs.on('open', () => {
+    console.log('Connected to Bitget WebSocket');
+    // Subscribe to BTCUSDT and ETHUSDT ticker data
+    subscribeToTicker('BTCUSDT');
+    subscribeToTicker('ETHUSDT');
+
+    // Set up ping/pong to keep the connection alive
+    setInterval(() => {
+      if (bitgetWs.readyState === WebSocket.OPEN) {
+        console.log('Sending ping to Bitget WebSocket');
+        bitgetWs.send(JSON.stringify({ op: 'ping' }));
+      }
+    }, 30000); // Send ping every 30 seconds
+  });
+
+  bitgetWs.on('message', (data) => {
+    const message = JSON.parse(data);
+    if (message.event === 'pong') {
+      console.log('Received pong from Bitget WebSocket');
+    } else if (message.arg && message.arg.channel === 'ticker') {
+      const tickerData = message.data[0];
+      io.emit('tickerUpdate', tickerData);
+    }
+  });
+
+  bitgetWs.on('error', (error) => {
+    console.error('WebSocket error:', error);
+  });
+
+  bitgetWs.on('close', () => {
+    console.log('WebSocket connection closed. Attempting to reconnect in 5 seconds...');
+    setTimeout(connectToBitget, 5000); // Reconnect after 5 seconds
+  });
+};
 
 // Function to handle WebSocket subscription message
 const subscribeToTicker = (symbol) => {
@@ -44,7 +77,7 @@ const subscribeToTicker = (symbol) => {
     op: 'subscribe',
     args: [
       {
-        instType: 'mc', // USDT futures
+        instType: 'MC', // Perpetual contract public channel
         channel: 'ticker',
         instId: symbol
       }
@@ -53,31 +86,8 @@ const subscribeToTicker = (symbol) => {
   bitgetWs.send(message);
 };
 
-// WebSocket event listeners for Bitget
-bitgetWs.on('open', () => {
-  console.log('Connected to Bitget WebSocket');
-  // Subscribe to BTCUSDT and ETHUSDT ticker data
-  subscribeToTicker('BTCUSDT');
-  subscribeToTicker('ETHUSDT');
-});
-
-bitgetWs.on('message', (data) => {
-  const message = JSON.parse(data);
-  // Ensure it's a ticker update
-  if (message.arg && message.arg.channel === 'ticker') {
-    const tickerData = message.data[0];
-    // Send ticker data to all connected clients via Socket.IO
-    io.emit('tickerUpdate', tickerData);
-  }
-});
-
-bitgetWs.on('error', (error) => {
-  console.error('WebSocket error:', error);
-});
-
-bitgetWs.on('close', () => {
-  console.log('WebSocket connection closed');
-});
+// Start WebSocket connection to Bitget
+connectToBitget();
 
 // Caching Twitch's public keys to avoid frequent network requests
 let cachedKeys = null;
@@ -153,23 +163,11 @@ app.get('/api/futures-pairs', verifyToken, async (req, res) => {
   }
 });
 
-// Submit a new trade and execute market orders immediately
-app.post('/api/trade', verifyToken, async (req, res) => {
-  // Code for submitting a new trade (as given)
-  // ...
-});
+// Submit a new trade and execute market orders immediately (as provided in your code)
 
-// Fetch open limit orders for the user
-app.get('/api/open-orders/:userId', verifyToken, async (req, res) => {
-  // Code for fetching open orders (as given)
-  // ...
-});
+// Fetch open limit orders for the user (as provided in your code)
 
-// Fetch executed positions for the user
-app.get('/api/executed-trades/:userId', verifyToken, async (req, res) => {
-  // Code for fetching executed trades (as given)
-  // ...
-});
+// Fetch executed positions for the user (as provided in your code)
 
 // Socket.IO setup for broadcasting updates
 io.on('connection', (client) => {
