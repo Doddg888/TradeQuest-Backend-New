@@ -9,7 +9,7 @@ const axios = require('axios');
 const http = require('http');
 const socketIo = require('socket.io');
 const jwt = require('jsonwebtoken');
-const WebSocket = require('ws'); // WebSocket client for Bitget
+const WebSocket = require('ws');
 
 // Import local modules
 const Trade = require('./models/Trade');
@@ -52,12 +52,22 @@ const connectToBitget = () => {
   });
 
   bitgetWs.on('message', (data) => {
-    const message = JSON.parse(data);
-    if (message.event === 'pong') {
-      console.log('Received pong from Bitget WebSocket');
-    } else if (message.arg && message.arg.channel === 'ticker') {
-      const tickerData = message.data[0];
-      io.emit('tickerUpdate', tickerData);
+    try {
+      const message = JSON.parse(data);
+      
+      // Log the received message for debugging purposes
+      console.log('Received WebSocket message:', message);
+
+      if (message.event === 'pong') {
+        console.log('Received pong from Bitget WebSocket');
+      } else if (message.arg && message.arg.channel === 'ticker' && message.data && message.data.length > 0) {
+        const tickerData = message.data[0];
+        io.emit('tickerUpdate', tickerData);
+      } else {
+        console.warn('Unexpected message format or empty data:', message);
+      }
+    } catch (error) {
+      console.error('Error processing WebSocket message:', error);
     }
   });
 
