@@ -39,14 +39,14 @@ const connectToBitget = () => {
   bitgetWs.on('open', () => {
     console.log('Connected to Bitget WebSocket');
     // Subscribe to BTCUSDT and ETHUSDT ticker data
-    subscribeToTicker('BTCUSDT_UMCBL');
-    subscribeToTicker('ETHUSDT_UMCBL');
+    subscribeToTicker('BTCUSDT');
+    subscribeToTicker('ETHUSDT');
 
     // Set up ping/pong to keep the connection alive
     setInterval(() => {
       if (bitgetWs.readyState === WebSocket.OPEN) {
         console.log('Sending ping to Bitget WebSocket');
-        bitgetWs.send(JSON.stringify({ op: 'ping' }));
+        bitgetWs.send('ping'); // Send ping as a plain string
       }
     }, 30000); // Send ping every 30 seconds
   });
@@ -87,7 +87,6 @@ const subscribeToTicker = (symbol) => {
     op: 'subscribe',
     args: [
       {
-        instType: 'umcbl', // Possible values: 'umcbl' (USDT-Margined Futures) or 'dmcbl' (Coin-Margined Futures)
         channel: 'ticker',
         instId: symbol
       }
@@ -175,20 +174,6 @@ app.get('/api/futures-pairs', verifyToken, async (req, res) => {
     console.error('Error fetching futures pairs:', error);
     res.status(500).json({ message: 'Failed to fetch futures pairs' });
   }
-});
-
-// Submit a new trade and execute market orders immediately (as provided in your code)
-
-// Fetch open limit orders for the user (as provided in your code)
-
-// Fetch executed positions for the user (as provided in your code)
-
-// Socket.IO setup for broadcasting updates
-io.on('connection', (client) => {
-  console.log('New client connected');
-  client.on('disconnect', () => {
-    console.log('Client disconnected');
-  });
 });
 
 // Start the server
