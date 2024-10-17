@@ -10,6 +10,7 @@ const http = require('http');
 const socketIo = require('socket.io');
 const jwt = require('jsonwebtoken');
 const WebSocket = require('ws');
+const winston = require('winston');
 
 // Import local modules
 const Trade = require('./models/Trade');
@@ -22,14 +23,23 @@ const PORT = process.env.PORT || 5000;
 const server = http.createServer(app);
 const io = socketIo(server);
 
+// Set up logger
+const logger = winston.createLogger({
+  level: process.env.NODE_ENV === 'production' ? 'warn' : 'debug',
+  transports: [
+    new winston.transports.Console(),
+    new winston.transports.File({ filename: 'logs/tradequest.log' })
+  ],
+});
+
 // Middleware
 app.use(cors());
 app.use(express.json());
 
 // MongoDB Connection
 mongoose.connect(process.env.MONGO_URI, {})
-  .then(() => console.log('MongoDB connected successfully'))
-  .catch(err => console.error('MongoDB connection error:', err));
+  .then(() => logger.info('MongoDB connected successfully'))
+  .catch(err => logger.error('MongoDB connection error:', err));
 
 // Function to handle Bitget WebSocket connection
 let bitgetWs;
@@ -37,43 +47,14 @@ const connectToBitget = () => {
   bitgetWs = new WebSocket('wss://ws.bitget.com/v2/ws/public');
 
   bitgetWs.on('open', () => {
-    console.log('Connected to Bitget WebSocket');
-
+    logger.info('Connected to Bitget WebSocket');
     // Subscribe to BTCUSDT and ETHUSDT ticker and candle data
-    const subscriptionMessage = JSON.stringify({
-      op: 'subscribe',
-      args: [
-        {
-          instType: 'SPOT',
-          channel: 'ticker',
-          instId: 'BTCUSDT'
-        },
-        {
-          instType: 'SPOT',
-          channel: 'candle5m',
-          instId: 'BTCUSDT'
-        },
-        {
-          instType: 'SPOT',
-          channel: 'ticker',
-          instId: 'ETHUSDT'
-        },
-        {
-          instType: 'SPOT',
-          channel: 'candle5m',
-          instId: 'ETHUSDT'
-        }
-      ]
-    });
-
-    console.log('Sending subscription message:', subscriptionMessage);
-    bitgetWs.send(subscriptionMessage);
+    subscribeToTickers(['BTCUSDT', 'ETHUSDT']);
 
     // Set up ping/pong to keep the connection alive
     setInterval(() => {
       if (bitgetWs.readyState === WebSocket.OPEN) {
-        console.log('Sending ping to Bitget WebSocket');
-        bitgetWs.send('ping');
+        bitgetWs.send('ping'); // Send 'ping' as a plain string
       }
     }, 30000); // Send ping every 30 seconds
   });
@@ -82,32 +63,60 @@ const connectToBitget = () => {
     try {
       const message = JSON.parse(data);
 
-      // Log the received message for debugging purposes
-      console.log('Received WebSocket message:', message);
+      // Throttle WebSocket logs - only log every 50th message
+      if (messageCount++ % 50 === 0) {
+        logger.debug('Received WebSocket message:', message);
+      }
 
       if (message === 'pong') {
-        console.log('Received pong from Bitget WebSocket');
+        logger.debug('Received pong from Bitget WebSocket');
       } else if (message.arg && message.arg.channel === 'ticker' && message.data && message.data.length > 0) {
         const tickerData = message.data[0];
         io.emit('tickerUpdate', tickerData);
       } else if (message.event && message.event === 'error') {
-        console.error('Error message from Bitget WebSocket:', message);
+        logger.error('Error message from Bitget WebSocket:', message);
       } else {
-        console.warn('Unexpected message format or empty data:', message);
+        logger.warn('Unexpected message format or empty data:', message);
       }
     } catch (error) {
-      console.error('Error processing WebSocket message:', error);
+      logger.error('Error processing WebSocket message:', error);
     }
   });
 
   bitgetWs.on('error', (error) => {
-    console.error('WebSocket error:', error);
+    logger.error('WebSocket error:', error);
   });
 
   bitgetWs.on('close', () => {
-    console.log('WebSocket connection closed. Attempting to reconnect in 5 seconds...');
+    logger.warn('WebSocket connection closed. Attempting to reconnect in 5 seconds...');
     setTimeout(connectToBitget, 5000); // Reconnect after 5 seconds
   });
+};
+
+// Function to handle WebSocket subscription message
+const subscribeToTickers = (symbols) => {
+  const subscriptions = symbols.map(symbol => [
+    {
+      instType: 'SPOT',
+      channel: 'ticker',
+      instId: symbol
+    },
+    {
+      instType: 'SPOT',
+      channel: 'candle5m',
+      instId: symbol
+    }
+  ]).flat();
+
+  const message = JSON.stringify({
+    op: 'subscribe',
+    args: subscriptions
+  });
+
+  if (bitgetWs.readyState === WebSocket.OPEN) {
+    bitgetWs.send(message);
+    logger.debug('Sending subscription message:', message);
+  }
 };
 
 // Start WebSocket connection to Bitget
@@ -127,7 +136,7 @@ const getTwitchPublicKeys = async () => {
     cachedKeys = response.data.keys;
     return cachedKeys;
   } catch (error) {
-    console.error('Failed to fetch Twitch public keys:', error);
+    logger.error('Failed to fetch Twitch public keys:', error);
     throw new Error('Unable to verify token');
   }
 };
@@ -161,7 +170,7 @@ const verifyToken = async (req, res, next) => {
     req.user = decoded; // Attach the decoded token data to the request object
     next(); // Proceed to the next middleware or route handler
   } catch (err) {
-    console.error('JWT verification failed:', err);
+    logger.error('JWT verification failed:', err);
     return res.status(401).json({ message: 'Unauthorized' });
   }
 };
@@ -182,20 +191,20 @@ app.get('/api/futures-pairs', verifyToken, async (req, res) => {
 
     res.json(response.data.data);
   } catch (error) {
-    console.error('Error fetching futures pairs:', error);
+    logger.error('Error fetching futures pairs:', error);
     res.status(500).json({ message: 'Failed to fetch futures pairs' });
   }
 });
 
 // Socket.IO setup for broadcasting updates
 io.on('connection', (client) => {
-  console.log('New client connected');
+  logger.info('New client connected');
   client.on('disconnect', () => {
-    console.log('Client disconnected');
+    logger.info('Client disconnected');
   });
 });
 
 // Start the server
 server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  logger.info(`Server running on port ${PORT}`);
 });
