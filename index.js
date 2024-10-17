@@ -38,15 +38,42 @@ const connectToBitget = () => {
 
   bitgetWs.on('open', () => {
     console.log('Connected to Bitget WebSocket');
-    // Subscribe to BTCUSDT and ETHUSDT ticker data
-    subscribeToTicker('BTCUSDT_SPBL');
-    subscribeToTicker('ETHUSDT_SPBL');
+
+    // Subscribe to BTCUSDT and ETHUSDT ticker and candle data
+    const subscriptionMessage = JSON.stringify({
+      op: 'subscribe',
+      args: [
+        {
+          instType: 'SPOT',
+          channel: 'ticker',
+          instId: 'BTCUSDT'
+        },
+        {
+          instType: 'SPOT',
+          channel: 'candle5m',
+          instId: 'BTCUSDT'
+        },
+        {
+          instType: 'SPOT',
+          channel: 'ticker',
+          instId: 'ETHUSDT'
+        },
+        {
+          instType: 'SPOT',
+          channel: 'candle5m',
+          instId: 'ETHUSDT'
+        }
+      ]
+    });
+
+    console.log('Sending subscription message:', subscriptionMessage);
+    bitgetWs.send(subscriptionMessage);
 
     // Set up ping/pong to keep the connection alive
     setInterval(() => {
       if (bitgetWs.readyState === WebSocket.OPEN) {
         console.log('Sending ping to Bitget WebSocket');
-        bitgetWs.send(JSON.stringify({ op: 'ping' })); // Send ping as JSON object
+        bitgetWs.send('ping');
       }
     }, 30000); // Send ping every 30 seconds
   });
@@ -54,11 +81,11 @@ const connectToBitget = () => {
   bitgetWs.on('message', (data) => {
     try {
       const message = JSON.parse(data);
-      
+
       // Log the received message for debugging purposes
       console.log('Received WebSocket message:', message);
 
-      if (message.event === 'pong') {
+      if (message === 'pong') {
         console.log('Received pong from Bitget WebSocket');
       } else if (message.arg && message.arg.channel === 'ticker' && message.data && message.data.length > 0) {
         const tickerData = message.data[0];
@@ -81,27 +108,6 @@ const connectToBitget = () => {
     console.log('WebSocket connection closed. Attempting to reconnect in 5 seconds...');
     setTimeout(connectToBitget, 5000); // Reconnect after 5 seconds
   });
-};
-
-// Function to handle WebSocket subscription message
-const subscribeToTicker = (symbol) => {
-  const message = JSON.stringify({
-    op: 'subscribe',
-    args: [
-      {
-        instType: 'SPOT', // 'SPOT' for spot market, can be changed based on requirement
-        channel: 'ticker',
-        instId: symbol
-      }
-    ]
-  });
-
-  // Log the subscription message being sent
-  console.log('Sending subscription message:', message);
-
-  if (bitgetWs.readyState === WebSocket.OPEN) {
-    bitgetWs.send(message);
-  }
 };
 
 // Start WebSocket connection to Bitget
