@@ -87,12 +87,15 @@ const subscribeToTicker = (symbol) => {
     op: 'subscribe',
     args: [
       {
-        instType: 'MC', // Perpetual contract public channel
         channel: 'ticker',
         instId: symbol
       }
     ]
   });
+
+  // Log the subscription message being sent
+  console.log('Sending subscription message:', message);
+
   bitgetWs.send(message);
 };
 
