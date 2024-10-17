@@ -1,5 +1,3 @@
-// File: index.js
-
 // Load environment variables from .env file
 require('dotenv').config();
 
@@ -41,14 +39,14 @@ const connectToBitget = () => {
   bitgetWs.on('open', () => {
     console.log('Connected to Bitget WebSocket');
     // Subscribe to BTCUSDT and ETHUSDT ticker data
-    subscribeToTicker('BTCUSDT_UMCBL');
-    subscribeToTicker('ETHUSDT_UMCBL');
+    subscribeToTicker('BTCUSDT_SPBL');
+    subscribeToTicker('ETHUSDT_SPBL');
 
     // Set up ping/pong to keep the connection alive
     setInterval(() => {
       if (bitgetWs.readyState === WebSocket.OPEN) {
         console.log('Sending ping to Bitget WebSocket');
-        bitgetWs.send(JSON.stringify({ op: 'ping' })); // Send ping as a JSON object
+        bitgetWs.send(JSON.stringify({ op: 'ping' })); // Send ping as JSON object
       }
     }, 30000); // Send ping every 30 seconds
   });
@@ -65,6 +63,8 @@ const connectToBitget = () => {
       } else if (message.arg && message.arg.channel === 'ticker' && message.data && message.data.length > 0) {
         const tickerData = message.data[0];
         io.emit('tickerUpdate', tickerData);
+      } else if (message.event && message.event === 'error') {
+        console.error('Error message from Bitget WebSocket:', message);
       } else {
         console.warn('Unexpected message format or empty data:', message);
       }
@@ -89,7 +89,7 @@ const subscribeToTicker = (symbol) => {
     op: 'subscribe',
     args: [
       {
-        instType: 'umcbl', // USDT-Margined Futures
+        instType: 'SPOT', // 'SPOT' for spot market, can be changed based on requirement
         channel: 'ticker',
         instId: symbol
       }
@@ -99,7 +99,9 @@ const subscribeToTicker = (symbol) => {
   // Log the subscription message being sent
   console.log('Sending subscription message:', message);
 
-  bitgetWs.send(message);
+  if (bitgetWs.readyState === WebSocket.OPEN) {
+    bitgetWs.send(message);
+  }
 };
 
 // Start WebSocket connection to Bitget
@@ -178,12 +180,6 @@ app.get('/api/futures-pairs', verifyToken, async (req, res) => {
     res.status(500).json({ message: 'Failed to fetch futures pairs' });
   }
 });
-
-// Submit a new trade and execute market orders immediately (as provided in your code)
-
-// Fetch open limit orders for the user (as provided in your code)
-
-// Fetch executed positions for the user (as provided in your code)
 
 // Socket.IO setup for broadcasting updates
 io.on('connection', (client) => {
