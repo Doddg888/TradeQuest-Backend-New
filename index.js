@@ -39,8 +39,8 @@ const connectToBitget = () => {
   bitgetWs.on('open', () => {
     console.log('Connected to Bitget WebSocket');
     // Subscribe to BTCUSDT and ETHUSDT ticker data
-    subscribeToTicker('BTCUSDT');
-    subscribeToTicker('ETHUSDT');
+    subscribeToTicker('BTCUSDT_UMCBL');
+    subscribeToTicker('ETHUSDT_UMCBL');
 
     // Set up ping/pong to keep the connection alive
     setInterval(() => {
@@ -87,6 +87,7 @@ const subscribeToTicker = (symbol) => {
     op: 'subscribe',
     args: [
       {
+        instType: 'umcbl', // Possible values: 'umcbl' (USDT-Margined Futures) or 'dmcbl' (Coin-Margined Futures)
         channel: 'ticker',
         instId: symbol
       }
