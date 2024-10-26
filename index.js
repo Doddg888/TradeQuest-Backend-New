@@ -42,18 +42,17 @@ app.get("/api/trading-pairs", async (req, res) => {
 
 // Submit a trade
 app.post("/api/submit-trade", async (req, res) => {
-    const { userId, symbol, entryPoint, leverage, margin, takeProfit, stopLoss, quantity } = req.body;
+    const { userId, symbol, entryPoint, leverage, margin, takeProfit, stopLoss } = req.body;
 
     try {
         const newTrade = await Trade.create({
             userId,
             symbol,
-            entryPoint, // Use entryPoint for limit orders
+            entryPoint,
             stopLoss,
             takeProfit,
             margin,
             leverage,
-            quantity,
             status: 'pending' // Set initial status
         });
         
@@ -68,32 +67,7 @@ app.post("/api/submit-trade", async (req, res) => {
     }
 });
 
-// Endpoint to fetch open trades for a specific user
-app.get("/api/open-trades/:userId", async (req, res) => {
-    const { userId } = req.params;
-
-    try {
-        const openTrades = await Trade.find({ userId, status: 'open' });
-        res.json(openTrades);
-    } catch (error) {
-        console.error('Error fetching open trades:', error);
-        res.status(500).json({ error: "Error fetching open trades" });
-    }
-});
-
-// WebSocket server for real-time monitoring
-const wss = new WebSocketServer({ noServer: true });
-
-wss.on("connection", (ws, req) => {
-    const tradingPair = req.url.split("/").pop();
-    console.log(`WebSocket connection opened for ${tradingPair}`);
-
-    ws.on("close", () => {
-        console.log(`WebSocket connection closed for ${tradingPair}`);
-    });
-});
-
-// Function to monitor trade price
+// Monitor trade price
 async function monitorTradePrice(trade) {
     const interval = setInterval(async () => {
         const currentPrice = await getCurrentPrice(trade.symbol);
@@ -108,16 +82,16 @@ async function monitorTradePrice(trade) {
     }, 5000);
 }
 
-// Function to open a trade
+// Open a trade
 async function openTrade(trade) {
-    trade.status = "open";
+    trade.status = "open"; // Change status to open
     await trade.save();
 
     console.log(`Trade ${trade._id} opened at entry: ${trade.entryPoint}`);
     notifyFrontendTradeOpen(trade);
 }
 
-// Function to notify frontend about opened trade
+// Notify frontend about opened trade
 function notifyFrontendTradeOpen(trade) {
     const message = {
         status: "opened",
@@ -148,9 +122,34 @@ async function getCurrentPrice(pair) {
     }
 }
 
+// Endpoint to fetch open trades for a specific user
+app.get("/api/open-trades/:userId", async (req, res) => {
+    const { userId } = req.params;
+
+    try {
+        const openTrades = await Trade.find({ userId, status: 'open' });
+        res.json(openTrades);
+    } catch (error) {
+        console.error('Error fetching open trades:', error);
+        res.status(500).json({ error: "Error fetching open trades" });
+    }
+});
+
 // Start server and handle WebSocket upgrade
 const server = app.listen(process.env.PORT, () => {
     console.log(`Server running on port ${process.env.PORT}`);
+});
+
+// Handle WebSocket connections
+const wss = new WebSocketServer({ noServer: true });
+
+wss.on("connection", (ws, req) => {
+    const tradingPair = req.url.split("/").pop();
+    console.log(`WebSocket connection opened for ${tradingPair}`);
+
+    ws.on("close", () => {
+        console.log(`WebSocket connection closed for ${tradingPair}`);
+    });
 });
 
 server.on("upgrade", (request, socket, head) => {
