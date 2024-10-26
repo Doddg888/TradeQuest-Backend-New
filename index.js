@@ -4,8 +4,10 @@ const mongoose = require("mongoose");
 const { WebSocketServer } = require("ws");
 const Trade = require("./models/Trade");
 const axios = require("axios");
+const cors = require("cors");
 
 const app = express();
+app.use(cors()); // Enable CORS for all routes
 app.use(express.json());
 
 // Connect to MongoDB
@@ -24,7 +26,7 @@ app.get("/api/trading-pairs", async (req, res) => {
         // Ensure the response contains data
         if (response.data && response.data.data) {
             const pairs = response.data.data.map((pair) => ({
-                symbol: pair.symbol, // Adjusting key names to be more clear
+                symbol: pair.instId, // Adjusting key names to be more clear
                 lastPrice: pair.lastPr, // Assuming lastPr is the last price
                 bidPrice: pair.bidPr, // Best bid price
                 askPrice: pair.askPr, // Best ask price
