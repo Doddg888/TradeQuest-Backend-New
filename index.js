@@ -10,6 +10,7 @@ const http = require('http');
 const socketIo = require('socket.io');
 const WebSocket = require('ws');
 const cron = require('node-cron');  // For scheduled tasks
+const TradingPair = require('./models/TradingPair'); // Add this line if not already present
 
 // Import local modules and routes
 const TradingPair = require('./models/TradingPair'); // Trading pair model
