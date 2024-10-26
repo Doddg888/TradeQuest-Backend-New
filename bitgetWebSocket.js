@@ -2,8 +2,6 @@ const WebSocket = require('ws');
 
 const bitgetWsUrl = 'wss://ws.bitget.com/v2/ws/public';
 let ws;
-
-// This array will hold the trading pairs that are currently subscribed
 let subscribedPairs = [];
 
 function connectWebSocket(io) {
@@ -11,7 +9,6 @@ function connectWebSocket(io) {
 
     ws.on('open', () => {
         console.log('WebSocket connected to Bitget');
-        // Subscribe to existing pairs in subscribedPairs
         subscribedPairs.forEach((pair) => {
             subscribeToPair(pair);
         });
@@ -22,7 +19,6 @@ function connectWebSocket(io) {
             const parsedData = JSON.parse(data);
             console.log('Received message:', JSON.stringify(parsedData, null, 2));
 
-            // Check if the message contains ticker data
             if (parsedData && parsedData.arg && parsedData.arg.channel === 'ticker' && parsedData.data && parsedData.data[0]) {
                 const priceData = parsedData.data[0];
                 const symbol = parsedData.arg.instId;
@@ -40,7 +36,7 @@ function connectWebSocket(io) {
 
     ws.on('close', () => {
         console.log('WebSocket connection closed, reconnecting...');
-        setTimeout(() => connectWebSocket(io), 5000); // Reconnect after 5 seconds
+        setTimeout(() => connectWebSocket(io), 5000);
     });
 
     ws.on('error', (error) => {
@@ -48,10 +44,9 @@ function connectWebSocket(io) {
     });
 }
 
-// Function to subscribe to a specific trading pair
 function subscribeToPair(pair) {
     if (!subscribedPairs.includes(pair)) {
-        subscribedPairs.push(pair); // Add pair to the subscribed list
+        subscribedPairs.push(pair);
         ws.send(JSON.stringify({
             "op": "subscribe",
             "args": [
@@ -66,14 +61,12 @@ function subscribeToPair(pair) {
     }
 }
 
-// Function to handle newly opened trades
 function handleNewTrade(trade) {
-    const pair = trade.symbol; // Get the trading pair from the trade
-    subscribeToPair(pair); // Subscribe to this trading pair
-    console.log(`Automatically subscribed to new trade pair: ${pair}`); // Log the subscription
+    const pair = trade.symbol;
+    subscribeToPair(pair);
 }
 
 module.exports = {
     connectWebSocket,
-    handleNewTrade // Export handleNewTrade for external use
+    handleNewTrade
 };
