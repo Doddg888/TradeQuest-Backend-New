@@ -23,10 +23,10 @@ app.get("/api/trading-pairs", async (req, res) => {
         // Log the API response to inspect its structure
         console.log('API Response:', response.data);
 
-        // Ensure the response contains data
+        // Ensure the response contains data and map the pairs
         if (response.data && response.data.data) {
             const pairs = response.data.data.map((pair) => ({
-                symbol: pair.instId, // Adjusting key names to be more clear
+                symbol: pair.symbol || pair.instId, // Adjust symbol to either `symbol` or `instId`
                 lastPrice: pair.lastPr, // Assuming lastPr is the last price
                 bidPrice: pair.bidPr, // Best bid price
                 askPrice: pair.askPr, // Best ask price
