@@ -24,7 +24,12 @@ app.get("/api/trading-pairs", async (req, res) => {
         // Ensure the response contains data
         if (response.data && response.data.data) {
             const pairs = response.data.data.map((pair) => ({
-                instId: pair.instId // Adjust based on actual response structure
+                symbol: pair.symbol, // Adjusting key names to be more clear
+                lastPrice: pair.lastPr, // Assuming lastPr is the last price
+                bidPrice: pair.bidPr, // Best bid price
+                askPrice: pair.askPr, // Best ask price
+                high24h: pair.high24h, // 24-hour high price
+                low24h: pair.low24h // 24-hour low price
             }));
             res.json(pairs);
         } else {
@@ -105,7 +110,6 @@ async function closeTrade(trade) {
 // Get current price from Bitget V2 API
 async function getCurrentPrice(pair) {
     try {
-        // Ensure the pair is defined before making the request
         if (!pair) {
             console.error('No trading pair provided');
             return null;
