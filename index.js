@@ -19,7 +19,6 @@ mongoose.connect(process.env.MONGO_URI)
 app.get("/api/trading-pairs", async (req, res) => {
     try {
         const response = await axios.get("https://api.bitget.com/api/v2/spot/market/tickers");
-
         console.log('API Response:', response.data);
 
         if (response.data && response.data.data) {
@@ -43,18 +42,19 @@ app.get("/api/trading-pairs", async (req, res) => {
 
 // Submit a trade
 app.post("/api/submit-trade", async (req, res) => {
-    const { userId, tradingPair, entry, leverage, margin, takeProfit, stopLoss } = req.body;
+    const { userId, symbol, entryPoint, leverage, margin, takeProfit, stopLoss, quantity } = req.body;
 
     try {
         const newTrade = await Trade.create({
             userId,
-            tradingPair,
-            entry,
-            leverage,
-            margin,
-            takeProfit,
+            symbol,
+            entryPoint, // Use entryPoint for limit orders
             stopLoss,
-            status: 'pending'
+            takeProfit,
+            margin,
+            leverage,
+            quantity,
+            status: 'pending' // Set initial status
         });
         
         res.json({ success: true, tradeId: newTrade._id });
@@ -96,11 +96,11 @@ wss.on("connection", (ws, req) => {
 // Function to monitor trade price
 async function monitorTradePrice(trade) {
     const interval = setInterval(async () => {
-        const currentPrice = await getCurrentPrice(trade.tradingPair);
+        const currentPrice = await getCurrentPrice(trade.symbol);
 
         if (currentPrice) {
-            console.log(`Current price for ${trade.tradingPair}: ${currentPrice}`);
-            if (currentPrice >= trade.entry) {
+            console.log(`Current price for ${trade.symbol}: ${currentPrice}`);
+            if (currentPrice >= trade.entryPoint) { // Compare against entryPoint
                 await openTrade(trade);
                 clearInterval(interval);
             }
@@ -113,7 +113,7 @@ async function openTrade(trade) {
     trade.status = "open";
     await trade.save();
 
-    console.log(`Trade ${trade._id} opened at entry: ${trade.entry}`);
+    console.log(`Trade ${trade._id} opened at entry: ${trade.entryPoint}`);
     notifyFrontendTradeOpen(trade);
 }
 
@@ -122,8 +122,8 @@ function notifyFrontendTradeOpen(trade) {
     const message = {
         status: "opened",
         tradeId: trade._id,
-        tradingPair: trade.tradingPair,
-        entry: trade.entry
+        tradingPair: trade.symbol,
+        entry: trade.entryPoint
     };
 
     wss.clients.forEach(client => {
