@@ -9,7 +9,7 @@ const app = express();
 app.use(express.json());
 
 // Connect to MongoDB
-mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
+mongoose.connect(process.env.MONGO_URI)
     .then(() => console.log("Connected to MongoDB"))
     .catch((err) => console.error("MongoDB connection error:", err));
 
@@ -18,13 +18,13 @@ app.get("/api/trading-pairs", async (req, res) => {
     try {
         const response = await axios.get("https://api.bitget.com/api/v2/spot/market/tickers");
 
-        // Log the response to inspect its structure
+        // Log the API response to inspect its structure
         console.log('API Response:', response.data);
 
         // Ensure the response contains data
         if (response.data && response.data.data) {
             const pairs = response.data.data.map((pair) => ({
-                instId: pair.instId // Assuming instId is the key you're interested in
+                instId: pair.instId // Adjust based on actual response structure
             }));
             res.json(pairs);
         } else {
@@ -105,6 +105,11 @@ async function closeTrade(trade) {
 // Get current price from Bitget V2 API
 async function getCurrentPrice(pair) {
     try {
+        // Ensure the pair is defined before making the request
+        if (!pair) {
+            console.error('No trading pair provided');
+            return null;
+        }
         const response = await axios.get(`https://api.bitget.com/api/v2/spot/market/ticker?symbol=${pair}`);
         // Log the price response for debugging
         console.log(`Current price response for ${pair}:`, response.data);
