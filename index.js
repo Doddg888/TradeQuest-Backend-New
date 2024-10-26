@@ -9,12 +9,10 @@ const axios = require('axios');
 const http = require('http');
 const socketIo = require('socket.io');
 const WebSocket = require('ws');
-const cron = require('node-cron');  // Cron for scheduled tasks
+const cron = require('node-cron');  // For scheduled tasks
 
 // Import local modules and routes
-const Trade = require('./models/Trade');
-const tradingPairsRoute = require('./routes/tradingPairs');
-const TradingPair = require('./models/TradingPair'); // Model for trading pairs
+const TradingPair = require('./models/TradingPair'); // Trading pair model
 
 // Initialize Express app
 const app = express();
@@ -34,7 +32,7 @@ mongoose.connect(process.env.MONGO_URI, {})
   .catch(err => console.error('MongoDB connection error:', err));
 
 // Scheduled Task to Fetch Trading Pairs
-cron.schedule('0 * * * *', async () => {
+cron.schedule('0 * * * *', async () => {  // Runs every hour
   try {
     const response = await axios.get('https://api.bitget.com/api/v2/spot/public/products');
     const tradingPairs = response.data.data;
@@ -64,6 +62,7 @@ app.get('/api/trading-pairs', async (req, res) => {
   }
 });
 
-// ... rest of your existing code (Socket.IO, WebSocket, JWT Verification, etc.)
-
-// S
+// Start the server
+server.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
