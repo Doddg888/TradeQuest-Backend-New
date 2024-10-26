@@ -1,3 +1,5 @@
+// server.js
+
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -6,6 +8,7 @@ const { WebSocketServer } = require('ws');
 require('dotenv').config();
 
 const Trade = require('./models/Trade');
+const connectWebSocket = require('./websocket');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -21,7 +24,7 @@ mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopol
 
 // Set up WebSocket server
 const wss = new WebSocketServer({ noServer: true });
-const clients = {};
+let clients = {};
 
 // Function to broadcast messages to specific clients
 function notifyClient(userId, message) {
@@ -30,45 +33,30 @@ function notifyClient(userId, message) {
     }
 }
 
-// Fetch trading pairs from Bitget (V2 API)
-app.get('/api/pairs', async (req, res) => {
+// Fetch trading pairs from Bitget V2 API
+app.get('/api/trading-pairs', async (req, res) => {
     try {
         const response = await axios.get('https://api.bitget.com/api/v2/spot/market/tickers');
-        res.json(response.data.data);
+        res.json(response.data.data); // Ensure response structure matches your needs
     } catch (error) {
         console.error('Error fetching pairs:', error);
         res.status(500).json({ message: 'Failed to fetch trading pairs.' });
     }
 });
 
-// Submit a trade with WebSocket notification setup
+// Submit a trade
 app.post('/api/trade', async (req, res) => {
     const { userId, symbol, entryPoint, stopLoss, takeProfit } = req.body;
 
-    if (!userId || !symbol || entryPoint == null) {
+    if (!userId || !symbol || !entryPoint) {
         return res.status(400).json({ message: 'Missing required fields.' });
     }
 
-    const trade = new Trade({
-        userId,
-        symbol,
-        entryPoint,
-        stopLoss,
-        takeProfit
-    });
-
+    const trade = new Trade({ userId, symbol, entryPoint, stopLoss, takeProfit });
     try {
         const savedTrade = await trade.save();
         res.status(201).json(savedTrade);
-
-        // Notify WebSocket client about new trade
-        notifyClient(userId, {
-            type: 'trade_submitted',
-            trade: savedTrade,
-            message: 'Trade submitted and monitoring started.',
-        });
-
-        // Start monitoring the trade price
+        notifyClient(userId, { type: 'trade_submitted', trade: savedTrade });
         monitorTradePrice(savedTrade);
     } catch (error) {
         console.error('Error saving trade:', error);
@@ -76,47 +64,19 @@ app.post('/api/trade', async (req, res) => {
     }
 });
 
-// Function to monitor trade price
+// Monitor trade price logic (mocked for example purposes)
 async function monitorTradePrice(trade) {
     const interval = setInterval(async () => {
-        try {
-            if (!trade.symbol) {
-                console.error('Error: symbol is undefined');
-                clearInterval(interval);
-                return;
-            }
-
-            const response = await axios.get(`https://api.bitget.com/api/v2/spot/market/ticker?symbol=${trade.symbol}`);
-            const currentPrice = parseFloat(response.data.data.last);
-
-            if (currentPrice >= trade.entryPoint) {
-                notifyClient(trade.userId, {
-                    type: 'trade_triggered',
-                    tradeId: trade._id,
-                    message: 'Trade entry point reached!',
-                });
-                clearInterval(interval);
-            }
-        } catch (error) {
-            console.error(`Error fetching price for ${trade.symbol}:`, error);
+        // Replace with actual price-checking from the WebSocket or API
+        const currentPrice = Math.random() * 100; // Mock current price
+        if (currentPrice >= trade.entryPoint) {
+            notifyClient(trade.userId, { type: 'trade_triggered', tradeId: trade._id });
             clearInterval(interval);
         }
     }, 5000);
 }
 
-// Get user trades
-app.get('/api/trades/:userId', async (req, res) => {
-    const { userId } = req.params;
-    try {
-        const trades = await Trade.find({ userId });
-        res.json(trades);
-    } catch (error) {
-        console.error('Error fetching trades:', error);
-        res.status(500).json({ message: 'Failed to fetch trades.' });
-    }
-});
-
-// WebSocket upgrade
+// WebSocket upgrade handling
 const server = app.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
 });
@@ -127,19 +87,15 @@ server.on('upgrade', (request, socket, head) => {
     });
 });
 
-// WebSocket connection handling
 wss.on('connection', (ws, req) => {
     const userId = req.url.split('?userId=')[1];
-
     if (userId) {
         clients[userId] = ws;
         ws.on('close', () => delete clients[userId]);
     }
-
-    ws.on('message', (message) => {
-        console.log('Received message:', message);
-        ws.send('Hello Client');
-    });
 });
+
+// Connect WebSocket to handle market updates
+connectWebSocket(wss);
 
 console.log(`WebSocket server is running on ws://localhost:${PORT}`);

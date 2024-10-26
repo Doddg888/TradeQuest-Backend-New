@@ -13,13 +13,14 @@ mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopol
     .then(() => console.log("Connected to MongoDB"))
     .catch((err) => console.error("MongoDB connection error:", err));
 
-// Fetch trading pairs
+// Fetch trading pairs using Bitget V2 API
 app.get("/api/trading-pairs", async (req, res) => {
     try {
-        const response = await axios.get("https://api.bitget.com/api/spot/v1/market/symbols");
-        const pairs = response.data.data.map((pair) => ({ instId: pair.symbol }));
+        const response = await axios.get("https://api.bitget.com/api/v2/spot/market/tickers");
+        const pairs = response.data.data.map((pair) => ({ instId: pair.instId })); // Adjust based on actual response structure
         res.json(pairs);
     } catch (error) {
+        console.error('Error fetching trading pairs:', error);
         res.status(500).json({ error: "Error fetching trading pairs" });
     }
 });
@@ -40,6 +41,7 @@ app.post("/api/submit-trade", async (req, res) => {
         });
         res.json({ success: true, tradeId: newTrade._id });
     } catch (error) {
+        console.error('Error submitting trade:', error);
         res.status(500).json({ error: "Error submitting trade" });
     }
 });
@@ -89,11 +91,11 @@ async function closeTrade(trade) {
     console.log(`Trade ${trade._id} closed`);
 }
 
-// Get current price from API
+// Get current price from Bitget V2 API
 async function getCurrentPrice(pair) {
     try {
-        const response = await axios.get(`https://api.bitget.com/api/spot/v1/market/ticker?symbol=${pair}`);
-        return parseFloat(response.data.data[0].close);
+        const response = await axios.get(`https://api.bitget.com/api/v2/spot/market/ticker?symbol=${pair}`);
+        return parseFloat(response.data.data[0].last); // Adjust based on actual response structure
     } catch (error) {
         console.error(`Error fetching price for ${pair}:`, error);
         return null;
