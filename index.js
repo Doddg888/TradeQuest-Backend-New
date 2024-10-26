@@ -19,7 +19,6 @@ mongoose.connect(process.env.MONGO_URI)
 app.get("/api/trading-pairs", async (req, res) => {
     try {
         const response = await axios.get("https://api.bitget.com/api/v2/spot/market/tickers");
-
         // Log the API response to inspect its structure
         console.log('API Response:', response.data);
 
@@ -56,11 +55,30 @@ app.post("/api/submit-trade", async (req, res) => {
             margin,
             takeProfit,
             stopLoss,
+            status: 'pending' // Set initial status
         });
+        
         res.json({ success: true, tradeId: newTrade._id });
+
+        // Start monitoring the trade price
+        monitorTradePrice(newTrade);
+
     } catch (error) {
         console.error('Error submitting trade:', error);
         res.status(500).json({ error: "Error submitting trade" });
+    }
+});
+
+// New endpoint to fetch open trades for a specific user
+app.get("/api/open-trades/:userId", async (req, res) => {
+    const { userId } = req.params;
+
+    try {
+        const openTrades = await Trade.find({ userId, status: 'open' }); // Fetch trades that are open for this user
+        res.json(openTrades);
+    } catch (error) {
+        console.error('Error fetching open trades:', error);
+        res.status(500).json({ error: "Error fetching open trades" });
     }
 });
 
@@ -76,37 +94,46 @@ wss.on("connection", (ws, req) => {
     });
 });
 
-// Monitor trades and check for conditions
-async function monitorTrades() {
-    const trades = await Trade.find({ status: "open" });
-
-    for (const trade of trades) {
+// Function to monitor trade price
+async function monitorTradePrice(trade) {
+    const interval = setInterval(async () => {
         const currentPrice = await getCurrentPrice(trade.tradingPair);
 
         if (currentPrice) {
-            const { entry, takeProfit, stopLoss } = trade;
-            if (entry <= currentPrice && (!takeProfit || currentPrice < takeProfit) && (!stopLoss || currentPrice > stopLoss)) {
-                await openTrade(trade);
-            }
-            if ((takeProfit && currentPrice >= takeProfit) || (stopLoss && currentPrice <= stopLoss)) {
-                await closeTrade(trade);
+            console.log(`Current price for ${trade.tradingPair}: ${currentPrice}`);
+            // Check if the current price meets the entry condition
+            if (currentPrice >= trade.entry) {
+                await openTrade(trade); // Open the trade
+                clearInterval(interval); // Stop monitoring
             }
         }
-    }
+    }, 5000); // Check every 5 seconds
 }
 
 // Function to open a trade
 async function openTrade(trade) {
-    trade.status = "open";
-    await trade.save();
+    trade.status = "open"; // Update trade status
+    await trade.save(); // Save updated trade
+
     console.log(`Trade ${trade._id} opened at entry: ${trade.entry}`);
+    notifyFrontendTradeOpen(trade); // Notify the frontend
 }
 
-// Function to close a trade
-async function closeTrade(trade) {
-    trade.status = "closed";
-    await trade.save();
-    console.log(`Trade ${trade._id} closed`);
+// Function to notify frontend about opened trade
+function notifyFrontendTradeOpen(trade) {
+    const message = {
+        status: "opened",
+        tradeId: trade._id,
+        tradingPair: trade.tradingPair,
+        entry: trade.entry
+    };
+
+    // Notify all connected WebSocket clients
+    wss.clients.forEach(client => {
+        if (client.readyState === WebSocket.OPEN) {
+            client.send(JSON.stringify(message));
+        }
+    });
 }
 
 // Get current price from Bitget V2 API
@@ -117,9 +144,7 @@ async function getCurrentPrice(pair) {
             return null;
         }
         const response = await axios.get(`https://api.bitget.com/api/v2/spot/market/ticker?symbol=${pair}`);
-        // Log the price response for debugging
-        console.log(`Current price response for ${pair}:`, response.data);
-        return parseFloat(response.data.data[0].last); // Adjust based on actual response structure
+        return parseFloat(response.data.data[0].last); // Return the last price
     } catch (error) {
         console.error(`Error fetching price for ${pair}:`, error);
         return null;
