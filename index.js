@@ -19,18 +19,17 @@ mongoose.connect(process.env.MONGO_URI)
 app.get("/api/trading-pairs", async (req, res) => {
     try {
         const response = await axios.get("https://api.bitget.com/api/v2/spot/market/tickers");
-        // Log the API response to inspect its structure
+
         console.log('API Response:', response.data);
 
-        // Ensure the response contains data and map the pairs
         if (response.data && response.data.data) {
             const pairs = response.data.data.map((pair) => ({
-                symbol: pair.symbol || pair.instId, // Adjust symbol to either `symbol` or `instId`
-                lastPrice: pair.lastPr, // Assuming lastPr is the last price
-                bidPrice: pair.bidPr, // Best bid price
-                askPrice: pair.askPr, // Best ask price
-                high24h: pair.high24h, // 24-hour high price
-                low24h: pair.low24h // 24-hour low price
+                symbol: pair.symbol || pair.instId,
+                lastPrice: pair.lastPr,
+                bidPrice: pair.bidPr,
+                askPrice: pair.askPr,
+                high24h: pair.high24h,
+                low24h: pair.low24h
             }));
             res.json(pairs);
         } else {
@@ -55,12 +54,12 @@ app.post("/api/submit-trade", async (req, res) => {
             margin,
             takeProfit,
             stopLoss,
-            status: 'pending' // Set initial status
+            status: 'pending'
         });
         
         res.json({ success: true, tradeId: newTrade._id });
 
-        // Start monitoring the trade price
+        // Start monitoring the trade price immediately
         monitorTradePrice(newTrade);
 
     } catch (error) {
@@ -69,12 +68,12 @@ app.post("/api/submit-trade", async (req, res) => {
     }
 });
 
-// New endpoint to fetch open trades for a specific user
+// Endpoint to fetch open trades for a specific user
 app.get("/api/open-trades/:userId", async (req, res) => {
     const { userId } = req.params;
 
     try {
-        const openTrades = await Trade.find({ userId, status: 'open' }); // Fetch trades that are open for this user
+        const openTrades = await Trade.find({ userId, status: 'open' });
         res.json(openTrades);
     } catch (error) {
         console.error('Error fetching open trades:', error);
@@ -86,7 +85,7 @@ app.get("/api/open-trades/:userId", async (req, res) => {
 const wss = new WebSocketServer({ noServer: true });
 
 wss.on("connection", (ws, req) => {
-    const tradingPair = req.url.split("/").pop(); // Extract trading pair from URL
+    const tradingPair = req.url.split("/").pop();
     console.log(`WebSocket connection opened for ${tradingPair}`);
 
     ws.on("close", () => {
@@ -101,22 +100,21 @@ async function monitorTradePrice(trade) {
 
         if (currentPrice) {
             console.log(`Current price for ${trade.tradingPair}: ${currentPrice}`);
-            // Check if the current price meets the entry condition
             if (currentPrice >= trade.entry) {
-                await openTrade(trade); // Open the trade
-                clearInterval(interval); // Stop monitoring
+                await openTrade(trade);
+                clearInterval(interval);
             }
         }
-    }, 5000); // Check every 5 seconds
+    }, 5000);
 }
 
 // Function to open a trade
 async function openTrade(trade) {
-    trade.status = "open"; // Update trade status
-    await trade.save(); // Save updated trade
+    trade.status = "open";
+    await trade.save();
 
     console.log(`Trade ${trade._id} opened at entry: ${trade.entry}`);
-    notifyFrontendTradeOpen(trade); // Notify the frontend
+    notifyFrontendTradeOpen(trade);
 }
 
 // Function to notify frontend about opened trade
@@ -128,7 +126,6 @@ function notifyFrontendTradeOpen(trade) {
         entry: trade.entry
     };
 
-    // Notify all connected WebSocket clients
     wss.clients.forEach(client => {
         if (client.readyState === WebSocket.OPEN) {
             client.send(JSON.stringify(message));
@@ -144,15 +141,12 @@ async function getCurrentPrice(pair) {
             return null;
         }
         const response = await axios.get(`https://api.bitget.com/api/v2/spot/market/ticker?symbol=${pair}`);
-        return parseFloat(response.data.data[0].last); // Return the last price
+        return parseFloat(response.data.data[0].last);
     } catch (error) {
         console.error(`Error fetching price for ${pair}:`, error);
         return null;
     }
 }
-
-// Check trades every 5 seconds
-setInterval(monitorTrades, 5000);
 
 // Start server and handle WebSocket upgrade
 const server = app.listen(process.env.PORT, () => {
