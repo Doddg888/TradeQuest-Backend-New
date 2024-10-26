@@ -80,8 +80,14 @@ app.post('/api/trade', async (req, res) => {
 async function monitorTradePrice(trade) {
     const interval = setInterval(async () => {
         try {
+            if (!trade.symbol) {
+                console.error('Error: symbol is undefined');
+                clearInterval(interval);
+                return;
+            }
+
             const response = await axios.get(`https://api.bitget.com/api/v2/spot/market/ticker?symbol=${trade.symbol}`);
-            const currentPrice = parseFloat(response.data.data.last); // Parse current price from API response
+            const currentPrice = parseFloat(response.data.data.last);
 
             if (currentPrice >= trade.entryPoint) {
                 notifyClient(trade.userId, {
@@ -89,13 +95,13 @@ async function monitorTradePrice(trade) {
                     tradeId: trade._id,
                     message: 'Trade entry point reached!',
                 });
-                clearInterval(interval); // Stop monitoring
+                clearInterval(interval);
             }
         } catch (error) {
-            console.error('Error fetching ticker data:', error);
+            console.error(`Error fetching price for ${trade.symbol}:`, error);
             clearInterval(interval);
         }
-    }, 5000); // Check every 5 seconds
+    }, 5000);
 }
 
 // Get user trades
