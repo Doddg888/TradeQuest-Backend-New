@@ -11,8 +11,13 @@ router.get('/', async (req, res) => {
       },
     });
 
-    // Send the trading pairs data to the client
-    res.json(response.data.data);
+    // Check if data was returned successfully
+    if (response.data && response.data.data) {
+      res.json(response.data.data);
+    } else {
+      console.error('Unexpected response structure:', response.data);
+      res.status(500).json({ message: 'Unexpected response structure from Bitget' });
+    }
   } catch (error) {
     console.error('Error fetching trading pairs:', error.response ? error.response.data : error.message);
     res.status(500).json({ message: 'Failed to fetch trading pairs' });
