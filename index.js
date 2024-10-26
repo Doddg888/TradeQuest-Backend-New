@@ -136,6 +136,19 @@ app.get("/api/open-trades/:userId", async (req, res) => {
     }
 });
 
+// Endpoint to fetch executed trades for a specific user
+app.get("/api/executed-trades/:userId", async (req, res) => {
+    const { userId } = req.params;
+
+    try {
+        const executedTrades = await Trade.find({ userId, status: 'executed' });
+        res.json(executedTrades);
+    } catch (error) {
+        console.error('Error fetching executed trades:', error);
+        res.status(500).json({ error: "Error fetching executed trades" });
+    }
+});
+
 // Start server and handle WebSocket upgrade
 const server = app.listen(process.env.PORT, () => {
     console.log(`Server running on port ${process.env.PORT}`);
