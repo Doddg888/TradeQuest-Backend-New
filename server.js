@@ -1,10 +1,8 @@
-// server.js
-
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const axios = require('axios');
-const { WebSocketServer } = require('ws'); // Add WebSocket
+const { WebSocketServer } = require('ws');
 require('dotenv').config();
 
 const Trade = require('./models/Trade');
@@ -23,7 +21,7 @@ mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopol
 
 // Set up WebSocket server
 const wss = new WebSocketServer({ noServer: true });
-let clients = {}; // Store WebSocket clients by userId for trade notifications
+const clients = {};
 
 // Function to broadcast messages to specific clients
 function notifyClient(userId, message) {
@@ -32,7 +30,7 @@ function notifyClient(userId, message) {
     }
 }
 
-// Fetch trading pairs from Bitget (Updated for V2 API)
+// Fetch trading pairs from Bitget (V2 API)
 app.get('/api/pairs', async (req, res) => {
     try {
         const response = await axios.get('https://api.bitget.com/api/v2/spot/market/tickers');
@@ -47,7 +45,7 @@ app.get('/api/pairs', async (req, res) => {
 app.post('/api/trade', async (req, res) => {
     const { userId, symbol, entryPoint, stopLoss, takeProfit } = req.body;
 
-    if (!userId || !symbol || !entryPoint) {
+    if (!userId || !symbol || entryPoint == null) {
         return res.status(400).json({ message: 'Missing required fields.' });
     }
 
@@ -70,7 +68,7 @@ app.post('/api/trade', async (req, res) => {
             message: 'Trade submitted and monitoring started.',
         });
 
-        // Open WebSocket connection to monitor trade price (real-time updates here)
+        // Start monitoring the trade price
         monitorTradePrice(savedTrade);
     } catch (error) {
         console.error('Error saving trade:', error);
@@ -78,20 +76,24 @@ app.post('/api/trade', async (req, res) => {
     }
 });
 
-// Function to monitor trade price (mocked, replace with real price monitoring logic)
+// Function to monitor trade price
 async function monitorTradePrice(trade) {
-    // Example mock: Simulate checking price with an interval
     const interval = setInterval(async () => {
-        // Replace this logic with actual price-checking from an API
-        const currentPrice = Math.random() * 100; // Mock current price
+        try {
+            const response = await axios.get(`https://api.bitget.com/api/v2/spot/market/ticker?symbol=${trade.symbol}`);
+            const currentPrice = parseFloat(response.data.data.last); // Parse current price from API response
 
-        if (currentPrice >= trade.entryPoint) {
-            notifyClient(trade.userId, {
-                type: 'trade_triggered',
-                tradeId: trade._id,
-                message: 'Trade entry point reached!',
-            });
-            clearInterval(interval); // Stop monitoring
+            if (currentPrice >= trade.entryPoint) {
+                notifyClient(trade.userId, {
+                    type: 'trade_triggered',
+                    tradeId: trade._id,
+                    message: 'Trade entry point reached!',
+                });
+                clearInterval(interval); // Stop monitoring
+            }
+        } catch (error) {
+            console.error('Error fetching ticker data:', error);
+            clearInterval(interval);
         }
     }, 5000); // Check every 5 seconds
 }
@@ -119,12 +121,13 @@ server.on('upgrade', (request, socket, head) => {
     });
 });
 
+// WebSocket connection handling
 wss.on('connection', (ws, req) => {
-    const userId = req.url.split('?userId=')[1]; // Assume userId is passed in the URL
+    const userId = req.url.split('?userId=')[1];
 
     if (userId) {
-        clients[userId] = ws; // Store WebSocket connection by userId
-        ws.on('close', () => delete clients[userId]); // Clean up on disconnect
+        clients[userId] = ws;
+        ws.on('close', () => delete clients[userId]);
     }
 
     ws.on('message', (message) => {
