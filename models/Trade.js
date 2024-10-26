@@ -1,20 +1,11 @@
-// models/Trade.js
-
 const mongoose = require('mongoose');
 
 const tradeSchema = new mongoose.Schema({
     userId: { type: String, required: true },
     symbol: { type: String, required: true },
-    orderType: {
-        type: String,
-        required: true,
-        enum: ['market', 'limit'], // Valid order types
-    },
     entryPoint: {
         type: Number,
-        required: function () {
-            return this.orderType === 'limit'; // Only required for limit orders
-        },
+        required: true, // Make this always required for the entry price
     },
     stopLoss: { type: Number, default: null },
     takeProfit: { type: Number, default: null },
@@ -27,4 +18,5 @@ const tradeSchema = new mongoose.Schema({
     executedAt: { type: Date, default: null },
 });
 
+// Remove the orderType field
 module.exports = mongoose.model('Trade', tradeSchema);
