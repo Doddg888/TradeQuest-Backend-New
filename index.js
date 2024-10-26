@@ -17,8 +17,19 @@ mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopol
 app.get("/api/trading-pairs", async (req, res) => {
     try {
         const response = await axios.get("https://api.bitget.com/api/v2/spot/market/tickers");
-        const pairs = response.data.data.map((pair) => ({ instId: pair.instId })); // Adjust based on actual response structure
-        res.json(pairs);
+
+        // Log the response to inspect its structure
+        console.log('API Response:', response.data);
+
+        // Ensure the response contains data
+        if (response.data && response.data.data) {
+            const pairs = response.data.data.map((pair) => ({
+                instId: pair.instId // Assuming instId is the key you're interested in
+            }));
+            res.json(pairs);
+        } else {
+            res.status(500).json({ error: "Unexpected API response structure" });
+        }
     } catch (error) {
         console.error('Error fetching trading pairs:', error);
         res.status(500).json({ error: "Error fetching trading pairs" });
@@ -95,6 +106,8 @@ async function closeTrade(trade) {
 async function getCurrentPrice(pair) {
     try {
         const response = await axios.get(`https://api.bitget.com/api/v2/spot/market/ticker?symbol=${pair}`);
+        // Log the price response for debugging
+        console.log(`Current price response for ${pair}:`, response.data);
         return parseFloat(response.data.data[0].last); // Adjust based on actual response structure
     } catch (error) {
         console.error(`Error fetching price for ${pair}:`, error);
