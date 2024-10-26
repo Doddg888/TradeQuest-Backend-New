@@ -11,8 +11,9 @@ const socketIo = require('socket.io');
 const jwt = require('jsonwebtoken');
 const WebSocket = require('ws');
 
-// Import local modules
+// Import local modules and routes
 const Trade = require('./models/Trade');
+const tradingPairsRoute = require('./routes/tradingPairs');
 
 // Initialize Express app
 const app = express();
@@ -25,6 +26,9 @@ const io = socketIo(server);
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+// Register the trading pairs route
+app.use('/api/trading-pairs', tradingPairsRoute);
 
 // MongoDB Connection
 mongoose.connect(process.env.MONGO_URI, {})
