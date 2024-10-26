@@ -8,12 +8,13 @@ const cors = require('cors');
 const axios = require('axios');
 const http = require('http');
 const socketIo = require('socket.io');
-const jwt = require('jsonwebtoken');
 const WebSocket = require('ws');
+const cron = require('node-cron');  // Cron for scheduled tasks
 
 // Import local modules and routes
 const Trade = require('./models/Trade');
 const tradingPairsRoute = require('./routes/tradingPairs');
+const TradingPair = require('./models/TradingPair'); // Model for trading pairs
 
 // Initialize Express app
 const app = express();
@@ -27,108 +28,42 @@ const io = socketIo(server);
 app.use(cors());
 app.use(express.json());
 
-// Register the trading pairs route
-app.use('/api/trading-pairs', tradingPairsRoute);
-
 // MongoDB Connection
 mongoose.connect(process.env.MONGO_URI, {})
   .then(() => console.log('MongoDB connected successfully'))
   .catch(err => console.error('MongoDB connection error:', err));
 
-// Dynamic WebSocket subscription based on requested symbol
-let bitgetWs;
-const connectToBitget = (symbols = []) => {
-  bitgetWs = new WebSocket('wss://ws.bitget.com/v2/ws/public');
-
-  bitgetWs.on('open', () => {
-    console.log('Connected to Bitget WebSocket');
-    subscribeToTickers(symbols);
-
-    // Set up ping/pong to keep the connection alive
-    setInterval(() => {
-      if (bitgetWs.readyState === WebSocket.OPEN) {
-        console.log('Sending ping to Bitget WebSocket');
-        bitgetWs.send('ping');
-      }
-    }, 30000);
-  });
-
-  bitgetWs.on('message', (data) => {
-    try {
-      const message = JSON.parse(data);
-      if (message === 'pong') return;
-      
-      // Emit ticker updates to all clients
-      if (message.arg && message.arg.channel === 'ticker' && message.data) {
-        const tickerData = message.data[0];
-        io.emit('tickerUpdate', tickerData);
-      }
-    } catch (error) {
-      console.error('Error processing WebSocket message:', error);
-    }
-  });
-
-  bitgetWs.on('error', (error) => {
-    console.error('WebSocket error:', error);
-  });
-
-  bitgetWs.on('close', () => {
-    console.log('WebSocket connection closed. Reconnecting in 5 seconds...');
-    setTimeout(() => connectToBitget(symbols), 5000);
-  });
-};
-
-// Subscription message function
-const subscribeToTickers = (symbols) => {
-  const subscriptions = symbols.map(symbol => ({
-    instType: 'SPOT',
-    channel: 'ticker',
-    instId: symbol
-  }));
-
-  const message = JSON.stringify({
-    op: 'subscribe',
-    args: subscriptions
-  });
-
-  if (bitgetWs.readyState === WebSocket.OPEN) {
-    bitgetWs.send(message);
-  }
-};
-
-// Start WebSocket connection with default symbols
-connectToBitget(['BTCUSDT', 'ETHUSDT']);
-
-// New Endpoint to fetch live prices for a specific trading pair
-app.get('/api/futures-pairs/:symbol/price', async (req, res) => {
-  const { symbol } = req.params;
+// Scheduled Task to Fetch Trading Pairs
+cron.schedule('0 * * * *', async () => {
   try {
-    const response = await axios.get(`https://api.bitget.com/api/v2/mix/market/ticker`, {
-      params: { symbol },
-      headers: { 'API-KEY': process.env.BITGET_API_KEY },
-    });
+    const response = await axios.get('https://api.bitget.com/api/v2/spot/public/products');
+    const tradingPairs = response.data.data;
 
-    res.json(response.data.data);
+    // Clear existing trading pairs and save new ones
+    await TradingPair.deleteMany({});
+    await TradingPair.insertMany(tradingPairs.map(pair => ({
+      instId: pair.instId,
+      baseCurrency: pair.baseCurrency,
+      quoteCurrency: pair.quoteCurrency,
+    })));
+
+    console.log("Trading pairs updated successfully");
   } catch (error) {
-    console.error(`Error fetching price for ${symbol}:`, error);
-    res.status(500).json({ message: 'Failed to fetch price' });
+    console.error("Error updating trading pairs:", error);
   }
 });
 
-// Socket.IO setup for broadcasting updates
-io.on('connection', (client) => {
-  console.log('New client connected');
-  client.on('subscribeToPair', (symbol) => {
-    console.log(`Client subscribed to ${symbol}`);
-    connectToBitget([symbol]);
-  });
-
-  client.on('disconnect', () => {
-    console.log('Client disconnected');
-  });
+// Endpoint to fetch stored trading pairs
+app.get('/api/trading-pairs', async (req, res) => {
+  try {
+    const pairs = await TradingPair.find({});
+    res.json(pairs);
+  } catch (error) {
+    console.error("Error fetching trading pairs:", error);
+    res.status(500).json({ message: "Failed to fetch trading pairs" });
+  }
 });
 
-// Start the server
-server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+// ... rest of your existing code (Socket.IO, WebSocket, JWT Verification, etc.)
+
+// S
