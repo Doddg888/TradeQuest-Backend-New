@@ -7,7 +7,7 @@ const axios = require("axios");
 const cors = require("cors");
 
 const app = express();
-app.use(cors()); // Enable CORS for all routes
+app.use(cors());
 app.use(express.json());
 
 // Connect to MongoDB
@@ -15,10 +15,10 @@ mongoose.connect(process.env.MONGO_URI)
     .then(() => console.log("Connected to MongoDB"))
     .catch((err) => console.error("MongoDB connection error:", err));
 
-// Fetch futures trading pairs using Bitget V2 API
+// Fetch USDT futures trading pairs
 app.get("/api/futures-trading-pairs", async (req, res) => {
     try {
-        const response = await axios.get("https://api.bitget.com/api/v2/mix/market/tickers");
+        const response = await axios.get("https://api.bitget.com/api/v2/mix/market/tickers?productType=USDT-FUTURES");
         console.log('API Response:', response.data);
 
         if (response.data && response.data.data) {
@@ -115,7 +115,7 @@ async function getCurrentPrice(pair) {
             console.error('No trading pair provided');
             return null;
         }
-        const response = await axios.get(`https://api.bitget.com/api/v2/mix/market/ticker?productType=COIN-FUTURES&symbol=${pair}`);
+        const response = await axios.get(`https://api.bitget.com/api/v2/mix/market/ticker?productType=USDT-FUTURES&symbol=${pair}`);
         return parseFloat(response.data.data[0].lastPr); // Use lastPr for futures price
     } catch (error) {
         console.error(`Error fetching price for ${pair}:`, error);

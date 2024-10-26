@@ -3,10 +3,10 @@ const express = require('express');
 const axios = require('axios');
 const router = express.Router();
 
-// Fetch trading pairs from Bitget V2 API
+// Fetch USDT futures trading pairs from Bitget V2 API
 router.get('/', async (req, res) => {
     try {
-        const response = await axios.get('https://api.bitget.com/api/v2/spot/market/tickers', {
+        const response = await axios.get('https://api.bitget.com/api/v2/mix/market/tickers?productType=USDT-FUTURES', {
             headers: {
                 'Content-Type': 'application/json'
             }
