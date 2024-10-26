@@ -15,15 +15,15 @@ mongoose.connect(process.env.MONGO_URI)
     .then(() => console.log("Connected to MongoDB"))
     .catch((err) => console.error("MongoDB connection error:", err));
 
-// Fetch trading pairs using Bitget V2 API
-app.get("/api/trading-pairs", async (req, res) => {
+// Fetch futures trading pairs using Bitget V2 API
+app.get("/api/futures-trading-pairs", async (req, res) => {
     try {
-        const response = await axios.get("https://api.bitget.com/api/v2/spot/market/tickers");
+        const response = await axios.get("https://api.bitget.com/api/v2/mix/market/tickers");
         console.log('API Response:', response.data);
 
         if (response.data && response.data.data) {
             const pairs = response.data.data.map((pair) => ({
-                symbol: pair.symbol || pair.instId,
+                symbol: pair.symbol,
                 lastPrice: pair.lastPr,
                 bidPrice: pair.bidPr,
                 askPrice: pair.askPr,
@@ -35,8 +35,8 @@ app.get("/api/trading-pairs", async (req, res) => {
             res.status(500).json({ error: "Unexpected API response structure" });
         }
     } catch (error) {
-        console.error('Error fetching trading pairs:', error);
-        res.status(500).json({ error: "Error fetching trading pairs" });
+        console.error('Error fetching futures trading pairs:', error);
+        res.status(500).json({ error: "Error fetching futures trading pairs" });
     }
 });
 
@@ -84,17 +84,18 @@ async function monitorTradePrice(trade) {
 
 // Open a trade
 async function openTrade(trade) {
-    trade.status = "open"; // Change status to open
+    trade.status = "executed"; // Change status to executed
+    trade.executedAt = Date.now(); // Store the time of execution
     await trade.save();
 
-    console.log(`Trade ${trade._id} opened at entry: ${trade.entryPoint}`);
+    console.log(`Trade ${trade._id} executed at entry: ${trade.entryPoint}`);
     notifyFrontendTradeOpen(trade);
 }
 
 // Notify frontend about opened trade
 function notifyFrontendTradeOpen(trade) {
     const message = {
-        status: "opened",
+        status: "executed",
         tradeId: trade._id,
         tradingPair: trade.symbol,
         entry: trade.entryPoint
@@ -107,15 +108,15 @@ function notifyFrontendTradeOpen(trade) {
     });
 }
 
-// Get current price from Bitget V2 API
+// Get current price from Bitget V2 API for futures
 async function getCurrentPrice(pair) {
     try {
         if (!pair) {
             console.error('No trading pair provided');
             return null;
         }
-        const response = await axios.get(`https://api.bitget.com/api/v2/spot/market/ticker?symbol=${pair}`);
-        return parseFloat(response.data.data[0].last);
+        const response = await axios.get(`https://api.bitget.com/api/v2/mix/market/ticker?productType=COIN-FUTURES&symbol=${pair}`);
+        return parseFloat(response.data.data[0].lastPr); // Use lastPr for futures price
     } catch (error) {
         console.error(`Error fetching price for ${pair}:`, error);
         return null;
@@ -127,7 +128,7 @@ app.get("/api/open-trades/:userId", async (req, res) => {
     const { userId } = req.params;
 
     try {
-        const openTrades = await Trade.find({ userId, status: 'open' });
+        const openTrades = await Trade.find({ userId, status: 'pending' });
         res.json(openTrades);
     } catch (error) {
         console.error('Error fetching open trades:', error);
